@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Uber Dashboard</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    background: #0b0b12;
+    color: white;
+    font-family: Arial;
+}
+
+.container {
+    width: 90%;
+    margin: auto;
+}
+
+h1 {
+    margin: 20px 0;
+}
+
+/* Tabs */
+.tabs {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.tabs button {
+    background: #1a1a24;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.tabs button:hover {
+    background: #1dbf73;
+}
+
+/* Content */
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Boxes */
+.box {
+    background: #1a1a24;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 10px;
+}
+
+/* 🔥 MEDIUM PIE CHART */
+#pieChart {
+    width: 420px !important;
+    height: 420px !important;
+    display: block;
+    margin: auto;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<h1>🚖 Uber Demand Dashboard</h1>
+
+<!-- Tabs -->
+<div class="tabs">
+    <button onclick="showTab('overview')">Overview</button>
+    <button onclick="showTab('trends')">Trends</button>
+    <button onclick="showTab('insights')">Insights</button>
+</div>
+
+<!-- OVERVIEW -->
+<div id="overview" class="tab-content active">
+
+    <div class="box">
+        <h2>KPI</h2>
+        <p>Total Rides: {{ kpi.total_rides }}</p>
+        <p>Peak Hour: {{ kpi.peak_hour }}</p>
+        <p>Weekend Lift: {{ kpi.weekend_lift }}</p>
+    </div>
+
+    <div class="box">
+        <h2>Check Demand</h2>
+
+        <form method="POST">
+            <input type="number" name="hour" placeholder="Hour (0-23)" required>
+            <select name="day">
+                <option>Monday</option>
+                <option>Tuesday</option>
+                <option>Wednesday</option>
+                <option>Thursday</option>
+                <option>Friday</option>
+                <option>Saturday</option>
+                <option>Sunday</option>
+            </select>
+            <button type="submit">Analyze</button>
+        </form>
+
+        {% if result %}
+        <p><strong>Rides:</strong> {{ result.rides }}</p>
+        <p><strong>Level:</strong> {{ result.level }}</p>
+        <p><strong>Action:</strong> {{ result.action }}</p>
+        {% endif %}
+    </div>
+
+    <div class="box">
+        <h2>Hourly Demand</h2>
+        <canvas id="hourlyChart"></canvas>
+    </div>
+
+</div>
+
+<!-- TRENDS -->
+<div id="trends" class="tab-content">
+
+    <div class="box">
+        <h2>Weekday Demand</h2>
+        <canvas id="weekdayChart"></canvas>
+    </div>
+
+    <div class="box">
+        <h2>Weekday vs Weekend</h2>
+        <canvas id="weekendChart"></canvas>
+    </div>
+
+</div>
+
+<!-- INSIGHTS -->
+<div id="insights" class="tab-content">
+
+    <div class="box">
+        <h2>Time Distribution</h2>
+
+        <div style="display:flex; justify-content:center;">
+            <canvas id="pieChart"></canvas>
+        </div>
+    </div>
+
+    <div class="box">
+        <h2>Anomalies</h2>
+        {% for a in anomaly_alerts %}
+            <p>{{ a.message }}</p>
+        {% endfor %}
+    </div>
+
+</div>
+
+</div>
+
+<script>
+
+// TAB SWITCH
+function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    document.getElementById(tabId).classList.add('active');
+}
+
+// DATA
+const hourlyData = {{ hourly_chart | safe }};
+const weekdayData = {{ weekday_chart | safe }};
+const weekendData = {{ weekend_vs_weekday | safe }};
+const pieData = {{ time_share_chart | safe }};
+
+// HOURLY
+new Chart(document.getElementById('hourlyChart'), {
+    type: 'bar',
+    data: {
+        labels: hourlyData.labels,
+        datasets: [{
+            label: "Hourly Rides",
+            data: hourlyData.data,
+            backgroundColor: '#1dbf73'
+        }]
+    }
+});
+
+// WEEKDAY
+new Chart(document.getElementById('weekdayChart'), {
+    type: 'bar',
+    data: {
+        labels: weekdayData.labels,
+        datasets: [{
+            label: "Weekday Rides",
+            data: weekdayData.data,
+            backgroundColor: '#74b9ff'
+        }]
+    }
+});
+
+// WEEKEND VS WEEKDAY
+new Chart(document.getElementById('weekendChart'), {
+    type: 'line',
+    data: {
+        labels: weekendData.labels,
+        datasets: [
+            {
+                label: "Weekday",
+                data: weekendData.weekday,
+                borderColor: '#1dbf73'
+            },
+            {
+                label: "Weekend",
+                data: weekendData.weekend,
+                borderColor: '#ff7675'
+            }
+        ]
+    }
+});
+
+// 🔥 MEDIUM PIE CHART
+new Chart(document.getElementById('pieChart'), {
+    type: 'pie',
+    data: {
+        labels: pieData.labels,
+        datasets: [{
+            data: pieData.data,
+            backgroundColor: [
+                '#2d3436',
+                '#00b894',
+                '#0984e3',
+                '#fdcb6e',
+                '#d63031'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+
+        plugins: {
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return context.label + " → " + context.raw + " rides";
+                    }
+                }
+            },
+            legend: {
+                labels: {
+                    color: "white"
+                }
+            }
+        }
+    }
+});
+
+</script>
+
+</body>
+</html>
